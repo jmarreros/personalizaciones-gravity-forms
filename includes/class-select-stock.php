@@ -119,12 +119,10 @@ class Select_Stock{
 		//recupero las opciones de la BD
 		$option_val = get_option($this->option_key);
 		if (! $option_val) {
-			dump_error_log($this->option_key);
 			return false;
 		}
 
 		// Recupero el stock de las opciones y lo descuento
-		dump_error_log($option_val);
 		if (array_key_exists($item_key, $option_val) ){
 			$stock = $option_val[$item_key];
 			if ( $stock > 0 ) {

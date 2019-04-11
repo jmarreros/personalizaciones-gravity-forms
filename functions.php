@@ -19,13 +19,18 @@ function enqueue_styles_child_theme() {
 				);
 }
 
-// Grav¡tyForms
+// GravityForms
 // =============
 
 // Variables globales importantes
 // ==============================
 define('FORM_ID', 3); // Id del formulario
 define('FORM_SELECTS_FIELDS',[78,79,80,81,82]); // Campos de select a evaluar stock
+define('FORM_REMOVE_FIELDS',[79,80,81,82,100,101,102,103]); // Campos de select a evaluar stock
+define('PERCENT_DISCOUNT', 10); // El % de descuento a usar
+
+define('FORM_DISCOUNT_FIELD', 91); // El segundo campo "Tipo de campus" se reutilizará
+define('FORM_REF_FIELD',99); // Se fusionara todas las referencias en el campo 99
 
 $form_id = FORM_ID;
 
@@ -69,7 +74,7 @@ function gf_after_save_admin_form($form){
 	foreach( FORM_SELECTS_FIELDS as $id_select){
 		$select = new Select_Stock($id_select);
 
-		if ( $form->id == $form_id ){ //valida form id
+		if ( $form['id'] == FORM_ID ){ //valida form id
 			foreach ($form['fields'] as &$field){
 				if ( $field->id == $id_select ){
 					$select->save_option($field->choices);
@@ -118,7 +123,6 @@ function gf_after_submission_form($entry, $form){
 	foreach( FORM_SELECTS_FIELDS as $id_select){
 		$select = new Select_Stock($id_select);
 		$item_key = $entry[$id_select];
-		dump_error_log($entry[$id_select]);
 		$select->subtract_item_stock($item_key);
 	}
 }
@@ -126,7 +130,8 @@ function gf_after_submission_form($entry, $form){
 // Frontend - Función para validar que se selecciona una opción de los selects
 add_action("gform_field_validation", "gf_validate_selects", 10, 4);
 function gf_validate_selects($result, $value, $form, $field){
-	if ( in_array($field->id, FORM_SELECTS_FIELDS, true) ){
+	$field_id = is_object( $field ) ? $field->id : $field['id'];
+	if ( in_array($field_id, FORM_SELECTS_FIELDS, true) ){
 		if ( $value == 'Seleccionar'){
 			$result['is_valid'] = false;
 			$result['message'] = 'Selecciona una opción';
@@ -137,151 +142,66 @@ function gf_validate_selects($result, $value, $form, $field){
 
 
 
-//Obtiene los valores grabados en opciones globales de WordPress
+// Grav¡tyForms Exportar archivos CSV
+// ===================================
 
+//Elimino los campos que no deberían mostrarse
+add_filter( 'gform_export_fields', 'gf_remove_add_fields', 10, 1 );
+function gf_remove_add_fields( $form ) {
 
-// Recuperar las opciones de la BD
-// function gf_get_options_stock($key){
+	if ( $form['id'] == FORM_ID ) {
+		// Campos a eliminar
+        $fields_standard = array('payment_amount','payment_date','payment_status','transaction_id','user_agent','ip','post_id');
+		$fields_to_remove = array_merge(FORM_REMOVE_FIELDS, $fields_standard);
 
-// }
+        foreach ( $form['fields'] as $key => $field ) {
+			$field_id = is_object( $field ) ? $field->id : $field['id'];
+			// Eliminar campos
+            if ( in_array( $field_id, $fields_to_remove ) ) {
+                unset ( $form['fields'][ $key ] );
+			}
+			//Modificar campo
+			if ($field_id == FORM_DISCOUNT_FIELD){
+				$form['fields'][ $key ]['label'] = "Descuento ".PERCENT_DISCOUNT."%";
+			}
+			if ($field_id == FORM_REF_FIELD){
+				$form['fields'][ $key ]['label'] = "Detalle Ref";
+			}
 
-// // Grabar el stock en la BD
-// function gf_save_options_stock(){
-// 	$id_select = 105;
-// 	update_option(GF_STOCK_CONTROL.$id_select, );
-// }
+		}
 
-// function gf_create_array(){
+	}
 
-// }
+    return $form;
+}
 
-// Función que se ejecuta al cargar el formulario en la administración
-// add_action( "gform_admin_pre_render_${form_id}", "pre_render_function" );
-// function pre_render_function($form){
-// 	$select_item = new Select_Stock();
+//Fusiona las columnas
+// 76,91 = Tipo de campus
+// 78,79,80,81,82 = fechas
+// 98 = referencia
+// 99,100,101,102,103 = Campos adicionales detalle referencia
+add_filter( 'gform_leads_before_export', 'gf_fusion_columns_for_export', 10, 3 );
+function gf_fusion_columns_for_export( $entries, $form, $paging ) {
+	if ( $form['id'] == FORM_ID ){
+		foreach( $entries as &$entry ) {
 
-// 	foreach ($form['fields'] as &$field){
-// 		if ( $field->id == 105 ){
-// 			$select_item->save_option($field->id, $field->choices);
-// 		}
-// 	}
+			$entry['76'] = $entry['76'].$entry['91'];
+			$entry['78'] = $entry['78'].$entry['79'].$entry['80'].$entry['81'].$entry['82'];
+			$entry['99'] = $entry['99'].$entry['100'].$entry['101'].$entry['102'].$entry['103'];
 
-// 	return $form;
-// }
+			//Calcular % descuento
+			$entry[FORM_DISCOUNT_FIELD] = "";
+			if ( ! empty($entry['98']) &&  strtolower($entry['98']) != 'ninguno' ){
+				$price = get_string_price($entry['76']);
+				if ( $price >= 0 ){
+					$entry[FORM_DISCOUNT_FIELD] = intval($price - ($price * PERCENT_DISCOUNT)/100) . '€';
+				}
+			}
+		}
+	}
 
-// function pre_render_function($form){
-// 	// dump_error_log( $form );
-
-// 		foreach ($form['fields'] as &$field){
-// 		if ( $field->id == 105 ){
-// 			// dump_error_log( $field);
-
-// 			$field->choices = Array( Array(
-// 				"text" => "xxxxx ssss",
-// 				"value" => "hola",
-// 				"isSelected" => true,
-// 				"price" => ''
-// 				),
-// 				Array(
-// 					"text" => "hola hola pesh",
-// 					"value" => "hola",
-// 					"isSelected" => false,
-// 					"price" => ''
-// 					)
-// 			);
-
-// 		}
-// 	}
-
-// 	return $form;
-// }
-
-// add_action( 'gform_after_save_form', 'dmcs_update_quantities_select', 10, 2 );
-// function dmcs_update_quantities_select( $form, $is_new ) {
-
-// 	foreach ($form['fields'] as &$field){
-// 		if ( $field->id == 105 ){
-// 			dump_error_log( $field);
-
-// 			$field->choices = Array( Array(
-// 				"text" => "hola hola pesh xxxx",
-// 				"value" => "hola",
-// 				"isSelected" => true,
-// 				"price" => ''
-// 				),
-// 				Array(
-// 					"text" => "hola hola pesh",
-// 					"value" => "hola",
-// 					"isSelected" => true,
-// 					"price" => ''
-// 					)
-// 			);
-
-// 		}
-// 	}
-// }
-
-
-
-// add_filter( 'gform_pre_render_3', 'dcms_hide_quantities_select' );
-
-// function dcms_hide_quantities_select($form){
-// 	$newFormField = array();
-
-// 	// dump_error_log( $form );
-
-// 	foreach ($form['fields'] as &$field){
-// 		if ( $field->id == 78 ){
-
-// 			dump_error_log($field);
-
-// 			$field->choices = Array( Array(
-// 				"text" => "hola z",
-// 				"value" => "hola",
-// 				"isSelected" => false,
-// 				"price" => ''
-// 				)
-// 			);
-// 		}
-// 	}
-// 	return $form;
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// add_filter( 'gform_export_fields', 'remove_fields', 10, 1 );
-// function remove_fields( $form ) {
-
-//     foreach ( $form['fields'] as $key => $field ) {
-//         // $field_id = is_object( $field ) ? $field: $field['id'];
-//         error_log( print_r( $field, true)  );
-//     }
-
-//     return $form;
-// }
-
-
-// add_filter( 'gform_leads_before_export', 'use_user_display_name_for_export', 10, 3 );
-// function use_user_display_name_for_export( $entries, $form, $paging ) {
-
-//     foreach( $entries as &$entry ) {
-//  		$entry['79'] = $entry['79'] . ' - ' . $entry['81'];
-//   		error_log( print_r( $entry, true)  );
-//     }
-
-//     return $entries;
-// }
+    return $entries;
+}
 
 
 

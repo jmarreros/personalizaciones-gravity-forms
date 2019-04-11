@@ -14,5 +14,15 @@ Text Domain:  storefront
 
 
 
+.single-product .widget_product_categories ul.product-categories > li{
+	display:none;
+}
+
+.single-product .widget_product_categories ul.product-categories > li.current-cat-parent,
+.single-product .widget_product_categories ul.product-categories > li.current-cat {
+	display:block;
+}
+
+
 
 
